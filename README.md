@@ -9,7 +9,7 @@ Students can watch:
 
 ## How to use
 
-1. Open `index.html` in a browser (no build or server required).
+1. Open `index.html` in a browser (no build or server required). If you prefer, you can serve it with any static server.
 2. Use the controls at the top to set:
 	- Number of feature maps
 	- Rows and columns per map
@@ -39,7 +39,17 @@ Use the “New Set” button to generate a fresh batch of problems.
 ## Softmax explained
 
 An independent section demonstrates softmax on a vector. Enter a vector (e.g., `2, 1, 0`) and compute:
-- Uses numerically stable form: subtract max and exponentiate.
-- Optional temperature T to control distribution sharpness (softmax(z/T)).
-- Shows shifted values, exponentials, their sum, and final probabilities (which sum to 1).
+- Shows exponentials, their sum, and final probabilities (which sum to 1).
 - Includes a simple bar visualization of probabilities.
+
+Note: For simplicity, the current implementation does not apply the numerically stable trick (subtracting max) or a temperature parameter. Those could be added as small enhancements.
+
+## Troubleshooting
+
+- If the Play/Step buttons appear unresponsive, ensure the page is served over HTTP (some browsers restrict layout reads in file:// contexts). Any static server works, e.g., Python:
+
+```bash
+python3 -m http.server 8000
+```
+
+Then open http://localhost:8000/ in your browser.

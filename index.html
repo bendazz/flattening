@@ -423,6 +423,88 @@
 
     function delay(ms){ return new Promise(res=> setTimeout(res, ms)); }
 
+    // Move a floating row "ghost" into the map's flat strip with a smooth translate
+    async function moveGhostToStrip(ghost, stripEl){
+      const rect = ghost.getBoundingClientRect();
+      const targetRect = stripEl.getBoundingClientRect();
+      // destination inside strip: padding 6px, or after last cell
+      let targetX = targetRect.left + 6;
+      if(stripEl.children.length>0){
+        const last = stripEl.children[stripEl.children.length-1].getBoundingClientRect();
+        targetX = last.right + 4; // gap
+      }
+      const targetY = targetRect.top + 6;
+      // translate from current ghost position
+      ghost.style.transform = `translate(${targetX-rect.left}px, ${targetY-rect.top}px)`;
+      await delay(420/state.speed);
+    }
+
+    // Append the concrete row values to the map's strip
+    function appendRowToStrip(grid, r, stripEl){
+      const row = grid[r];
+      row.forEach(val=>{
+        const c = document.createElement('div'); c.className='flat-cell'; c.textContent = val;
+        c.style.opacity='0';
+        stripEl.appendChild(c);
+        requestAnimationFrame(()=>{ c.style.transition=`opacity ${220/state.speed}ms ease`; c.style.opacity='1'; });
+      });
+    }
+
+    // Animate unrolling of a single map (row-by-row)
+    async function animateUnrollForMap(m, parts){
+      const gridEl = parts[m].gridEl;
+      const stripEl = parts[m].strip;
+      const grid = state.featureMaps[m];
+      for(let r=0; r<state.rows; r++){
+        if(state.paused) return 'paused';
+        state.rowIndex = r;
+        highlightRow(gridEl, r);
+        const ghost = createRowGhost(gridEl, r);
+        await moveGhostToStrip(ghost, stripEl);
+        ghost.remove();
+        appendRowToStrip(grid, r, stripEl);
+        await delay(260/state.speed);
+        unhighlightAll(gridEl);
+      }
+      state.rowIndex = 0;
+      return 'done';
+    }
+
+    // Animate concatenation of all map strips into the final vector
+    async function animateConcat(parts){
+      for(let m=0; m<state.maps; m++){
+        if(state.paused) return 'paused';
+        const stripEl = parts[m].strip;
+        // Build a ghost from the current strip at its on-screen position
+        const rect = stripEl.getBoundingClientRect();
+        const ghost = document.createElement('div'); ghost.className='ghost';
+        ghost.style.left = rect.left+'px'; ghost.style.top = rect.top+'px';
+        ghost.style.width = rect.width+'px'; ghost.style.height = rect.height+'px';
+        const clone = stripEl.cloneNode(true); clone.style.marginTop='0'; ghost.appendChild(clone); document.body.appendChild(ghost);
+
+        // Compute target position in final strip (append to end)
+        const target = el.finalStrip; const targetRect = target.getBoundingClientRect();
+        let targetX = targetRect.left + 6;
+        if(target.children.length>0){
+          const last = target.children[target.children.length-1].getBoundingClientRect();
+          targetX = last.right + 4;
+        }
+        const targetY = targetRect.top + 6;
+        ghost.style.transform = `translate(${targetX-rect.left}px, ${targetY-rect.top}px)`;
+        await delay(420/state.speed);
+        ghost.remove();
+
+        // Append real children to final strip
+        [...stripEl.children].forEach(orig=>{
+          const c = document.createElement('div'); c.className='flat-cell'; c.textContent = orig.textContent; c.style.opacity='0';
+          target.appendChild(c);
+          requestAnimationFrame(()=>{ c.style.transition=`opacity ${220/state.speed}ms ease`; c.style.opacity='1'; });
+        });
+        await delay(120/state.speed);
+      }
+      return 'done';
+    }
+
     function resetState(){
       state.running = false; state.paused = false; state.mapIndex = 0; state.rowIndex = 0; state.phase = 'unroll';
       setControlsRunning(false);
