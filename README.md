@@ -1,3 +1,4 @@
+
 # CNN Flattening Visualizer
 
 A tiny, framework-free web app to demonstrate the flattening step in a convolutional neural network.
