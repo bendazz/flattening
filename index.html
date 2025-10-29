@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CNN Flattening Visualizer</title>
+  <style>
+    :root{
+      --bg: #0f1221;
+      --panel: #151935;
+      --accent: #6ea8fe;
+      --accent-2: #a78bfa;
+      --accent-3: #60c6a8;
+      --text: #e8eaf6;
+      --muted: #9aa3b2;
+      --cell: #1e2453;
+      --cell-border: #2a3166;
+      --highlight: #2b356b;
+      --good: #31d0aa;
+      --warn: #ffcc66;
+      --danger: #ff7a7a;
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
+      --radius: 12px;
+      --speed: 400ms;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; padding:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 10% -10%, #232951, transparent),
+                  radial-gradient(1000px 500px at 100% 0%, #1a1f42, transparent),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display:flex; flex-direction:column;
+    }
+    header{
+      padding: 24px 20px 8px; text-align:center;
+    }
+    header h1{ margin:0 0 6px; font-weight:800; letter-spacing:0.2px; }
+    header p{ margin:0; color:var(--muted) }
+    .app{
+      width: min(1200px, 94vw);
+      margin: 18px auto 32px;
+    }
+    .controls{
+      background: var(--panel);
+      border: 1px solid #242b63;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px;
+      display:grid; grid-template-columns: repeat(12, 1fr); gap: 10px; align-items:end;
+    }
+    .controls .group{ display:flex; flex-direction:column; gap:6px; }
+    .controls label{ font-size:12px; color: var(--muted); }
+    .controls input[type="number"], .controls input[type="range"]{
+      background: var(--cell); color: var(--text);
+      border: 1px solid var(--cell-border);
+      padding:8px 10px; border-radius:8px; outline:none;
+    }
+    .controls .group.small{ grid-column: span 2; }
+    .controls .group.wide{ grid-column: span 4; }
+    .controls .buttons{ grid-column: span 12; display:flex; gap:10px; flex-wrap:wrap; }
+
+    button{
+      background: linear-gradient(180deg, #7ea3ff, #5a7bff);
+      color:#0b0f2a; border:none; padding:10px 14px; border-radius:10px; font-weight:700;
+      box-shadow: 0 6px 16px rgba(110,168,254,0.35);
+      cursor: pointer; transition: transform .08s ease, opacity .2s ease, filter .2s;
+    }
+    button.secondary{ background: linear-gradient(180deg, #9ba5c7, #7f89ad); color:#0b0f2a; box-shadow: 0 6px 16px rgba(155,165,199,0.25); }
+    button.ghost{ background: transparent; border: 1px solid #2e376f; color: var(--text); box-shadow:none; }
+    button:disabled{ filter: grayscale(.4) brightness(.8); cursor:not-allowed; }
+    button:active{ transform: translateY(1px); }
+
+    .stage{
+      margin-top:16px;
+      display:grid; grid-template-columns: 1fr; gap:16px;
+    }
+
+    .maps{
+      display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px;
+    }
+    .map-card{
+      background: var(--panel);
+      border: 1px solid #242b63; border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding:12px;
+      position:relative;
+      overflow:hidden;
+    }
+    .map-title{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .badge{ font-size:11px; color:#0b0f2a; background: var(--accent-2); padding:3px 8px; border-radius:999px; font-weight:700; }
+
+    .grid{ display:grid; gap:4px; background: #141a3f; padding:6px; border-radius:10px; border:1px solid #283066; }
+    .cell{
+      background: var(--cell);
+      border: 1px solid var(--cell-border);
+      min-width:34px; min-height:34px; display:flex; align-items:center; justify-content:center;
+      border-radius:8px; font-weight:700; color:#dbe2ff;
+    }
+    .cell small{ opacity:.8; font-weight:600; }
+    .cell.hl{ outline: 2px solid var(--warn); background: var(--highlight); }
+
+    .flat-strip{
+      margin-top:10px;
+      display:flex; flex-wrap:wrap; gap:4px; background:#141a3f; padding:6px; border-radius:10px; border:1px solid #283066;
+      min-height:46px;
+    }
+    .flat-cell{ background: #23306a; border:1px solid #2f3c7c; color:#e9edff; padding:8px 10px; border-radius:8px; font-weight:700; min-width:34px; text-align:center; }
+
+    .final{
+      margin-top:6px;
+      background: var(--panel);
+      border: 1px solid #242b63; border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding:12px;
+    }
+    .final h3{ margin: 0 0 8px; }
+    .final-strip{ display:flex; flex-wrap:wrap; gap:4px; background:#141a3f; padding:6px; border-radius:10px; border:1px solid #283066; min-height:46px; }
+
+    .ghost{
+      position: fixed; left:0; top:0; transform-origin: 0 0;
+      transition: transform var(--speed) ease, opacity var(--speed) ease;
+      z-index: 50; pointer-events:none;
+    }
+    .ghost .cell, .ghost .flat-cell{ box-shadow: 0 6px 16px rgba(0,0,0,0.45); }
+
+    .note{ color: var(--muted); font-size: 12px; margin-top:6px; }
+    footer{ text-align:center; color: var(--muted); padding: 12px 0 24px; }
+
+    /* Practice problems */
+    .practice{ margin-top:20px; }
+    .practice h2{ margin: 12px 0 6px; }
+    .practice .practice-controls{ margin: 8px 0 12px; }
+    .problems{ display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    .q-card{ background: var(--panel); border: 1px solid #242b63; border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px; }
+    .q-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .q-title{ font-weight: 800; }
+    .q-body{ color: var(--text); }
+    .q-body .givens{ color: var(--muted); margin: 6px 0 10px; }
+    .q-actions{ display:flex; gap:8px; margin-top:8px; }
+    .answer{ background:#141a3f; border:1px solid #283066; border-radius: 10px; padding:10px; margin-top:8px; display:none; }
+    .answer.show{ display:block; }
+    .answer code{ color:#dbe2ff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CNN Flattening Visualizer</h1>
+    <p>Watch feature maps unroll row-by-row, then get concatenated into a single vector.</p>
+  </header>
+  <div class="app">
+    <section class="controls" id="controls">
+      <div class="group small">
+        <label for="maps">Feature maps</label>
+        <input id="maps" type="number" min="1" max="6" value="3" />
+      </div>
+      <div class="group small">
+        <label for="rows">Rows</label>
+        <input id="rows" type="number" min="2" max="8" value="3" />
+      </div>
+      <div class="group small">
+        <label for="cols">Cols</label>
+        <input id="cols" type="number" min="2" max="8" value="3" />
+      </div>
+      <div class="group wide">
+        <label for="speed">Speed (<span id="speedLabel">1.0x</span>)</label>
+        <input id="speed" type="range" min="0.25" max="2" step="0.25" value="1" />
+      </div>
+      <div class="buttons">
+        <button id="generate" class="ghost">Generate</button>
+        <button id="play">Play</button>
+        <button id="pause" class="secondary" disabled>Pause</button>
+        <button id="step" class="secondary">Step</button>
+        <button id="reset" class="ghost">Reset</button>
+      </div>
+    </section>
+
+    <section class="stage" id="stage">
+      <div class="maps" id="mapsContainer"></div>
+      <div class="final">
+        <h3>Final Flattened Vector</h3>
+        <div class="final-strip" id="finalStrip"></div>
+        <div class="note">After each map is unrolled, its vector is glued to the end of this final vector.</div>
+      </div>
+    </section>
+
+    <section class="practice" id="practice">
+      <h2>Practice: Flattened Vector Dimensions</h2>
+      <p class="note">Assume: no padding, 3×3 convolution (stride 1), followed by 2×2 max pooling (stride 2). Input is RGB (3 channels).</p>
+      <div class="practice-controls">
+        <button id="newSet" class="ghost">New Set</button>
+      </div>
+      <div id="problems" class="problems"></div>
+    </section>
+  </div>
+  <footer>
+    Built with vanilla HTML/CSS/JS — no frameworks. Designed for teaching the flattening step in CNNs.
+  </footer>
+
+  <script>
+    // --- State ---
+    const state = {
+      maps: 3,
+      rows: 3,
+      cols: 3,
+      speed: 1, // 1.0x
+      featureMaps: [], // Array of 2D arrays
+      running: false,
+      paused: false,
+      mapIndex: 0,
+      rowIndex: 0,
+      phase: 'unroll', // 'unroll' | 'concat' | 'done'
+    };
+
+    // --- Elements ---
+    const el = {
+      maps: document.getElementById('maps'),
+      rows: document.getElementById('rows'),
+      cols: document.getElementById('cols'),
+      speed: document.getElementById('speed'),
+      speedLabel: document.getElementById('speedLabel'),
+      generate: document.getElementById('generate'),
+      play: document.getElementById('play'),
+      pause: document.getElementById('pause'),
+      step: document.getElementById('step'),
+      reset: document.getElementById('reset'),
+      mapsContainer: document.getElementById('mapsContainer'),
+      finalStrip: document.getElementById('finalStrip'),
+    };
+
+    // --- Helpers ---
+    function randInt(min, max){ return Math.floor(Math.random()*(max-min+1))+min }
+    function generateMaps(M, R, C){
+      const maps = [];
+      for(let m=0;m<M;m++){
+        const grid = [];
+        for(let r=0;r<R;r++){
+          const row = [];
+          for(let c=0;c<C;c++) row.push(randInt(-3,9));
+          grid.push(row);
+        }
+        maps.push(grid);
+      }
+      return maps;
+    }
+
+    function clearStage(){
+      el.mapsContainer.innerHTML = '';
+      el.finalStrip.innerHTML = '';
+    }
+
+    function makeMapCard(mIndex, grid){
+      const card = document.createElement('div');
+      card.className = 'map-card';
+
+      const title = document.createElement('div');
+      title.className = 'map-title';
+      const h = document.createElement('strong');
+      h.textContent = `Feature Map ${mIndex+1}`;
+      const b = document.createElement('span'); b.className='badge'; b.textContent = `#${mIndex+1}`;
+      title.appendChild(h); title.appendChild(b);
+
+      const gridEl = document.createElement('div');
+      gridEl.className = 'grid';
+      gridEl.style.gridTemplateColumns = `repeat(${state.cols}, minmax(34px, 1fr))`;
+
+      grid.forEach((row, r)=>{
+        row.forEach((val, c)=>{
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+          cell.textContent = val;
+          gridEl.appendChild(cell);
+        })
+      })
+
+      const strip = document.createElement('div'); strip.className = 'flat-strip';
+      strip.id = `flat-${mIndex}`;
+
+      card.appendChild(title);
+      card.appendChild(gridEl);
+      card.appendChild(strip);
+      return { card, gridEl, strip };
+    }
+
+    function renderStage(){
+      clearStage();
+      const parts = [];
+      state.featureMaps.forEach((grid, i)=>{
+        const built = makeMapCard(i, grid);
+        parts.push(built);
+        el.mapsContainer.appendChild(built.card);
+      });
+      return parts; // keep for DOM access
+    }
+
+    function setControlsRunning(running){
+      el.play.disabled = running;
+      el.pause.disabled = !running;
+      el.step.disabled = running; // step only when not auto-playing
+    }
+
+    function highlightRow(gridEl, row){
+      [...gridEl.children].forEach(cell=>{
+        const r = +cell.dataset.row;
+        cell.classList.toggle('hl', r===row);
+      });
+    }
+
+    function unhighlightAll(gridEl){
+      [...gridEl.children].forEach(cell=> cell.classList.remove('hl'));
+    }
+
+    function createRowGhost(gridEl, row){
+      // Create an absolutely positioned clone of the row cells at their screen positions
+      const cells = [...gridEl.children].filter(c=> +c.dataset.row===row);
+      const firstRect = cells[0].getBoundingClientRect();
+      const lastRect = cells[cells.length-1].getBoundingClientRect();
+      const padding = 6; // matches grid padding
+
+      const ghost = document.createElement('div');
+      ghost.className = 'ghost';
+      const x = firstRect.left - padding;
+      const y = firstRect.top - padding;
+      const w = (lastRect.right - firstRect.left) + padding*2;
+      const h = (firstRect.bottom - firstRect.top) + padding*2;
+      ghost.style.left = x + 'px';
+      ghost.style.top = y + 'px';
+      ghost.style.width = w + 'px';
+      ghost.style.height = h + 'px';
+
+      // Build row replica
+      const rowWrap = document.createElement('div');
+      rowWrap.style.display = 'grid';
+      rowWrap.style.gridTemplateColumns = `repeat(${cells.length}, minmax(34px, 1fr))`;
+      rowWrap.style.gap = '4px';
+      rowWrap.style.background = '#141a3f';
+      rowWrap.style.padding = '6px';
+      rowWrap.style.borderRadius = '10px';
+      rowWrap.style.border = '1px solid #283066';
+
+      cells.forEach(c=>{
+        const clone = document.createElement('div');
+        clone.className = 'cell';
+        clone.textContent = c.textContent;
+        rowWrap.appendChild(clone);
+      })
+      ghost.appendChild(rowWrap);
+      document.body.appendChild(ghost);
+      return ghost;
+    }
+
+    function moveGhostToStrip(ghost, stripEl){
+      // Compute transform delta from current ghost position to strip append position
+      const ghostRect = ghost.getBoundingClientRect();
+      const targetRect = stripEl.getBoundingClientRect();
+      // target x: after current children
+      const children = [...stripEl.children];
+      let targetX = targetRect.left + 6; // strip padding
+      if(children.length>0){
+        const last = children[children.length-1].getBoundingClientRect();
+        targetX = last.right + 4; // gap
+      }
+      const targetY = targetRect.top + 6; // strip padding
+      const dx = targetX - ghostRect.left;
+      const dy = targetY - ghostRect.top;
+      ghost.style.transform = `translate(${dx}px, ${dy}px)`;
+      return new Promise(res=> setTimeout(res, 380/state.speed + 30));
+    }
+
+    function appendRowToStrip(grid, row, stripEl){
+      grid[row].forEach(val=>{
+        const c = document.createElement('div');
+        c.className = 'flat-cell';
+        c.textContent = val;
+        c.style.opacity = '0';
+        c.style.transform = 'translateX(-10px)';
+        stripEl.appendChild(c);
+        requestAnimationFrame(()=>{
+          c.style.transition = `all ${260/state.speed}ms ease`;
+          c.style.opacity = '1';
+          c.style.transform = 'translateX(0)';
+        });
+      })
+    }
+
+    async function animateUnrollForMap(mapIndex, parts){
+      const grid = state.featureMaps[mapIndex];
+      const gridEl = parts[mapIndex].gridEl;
+      const stripEl = parts[mapIndex].strip;
+
+      for(let r=0; r<state.rows; r++){
+        if(state.paused) return 'paused';
+        highlightRow(gridEl, r);
+        const ghost = createRowGhost(gridEl, r);
+        await moveGhostToStrip(ghost, stripEl);
+        ghost.remove();
+        appendRowToStrip(grid, r, stripEl);
+        await delay(450/state.speed);
+        unhighlightAll(gridEl);
+      }
+      return 'done';
+    }
+
+    async function animateConcat(parts){
+      // Move each map's strip into final vector via ghosts
+      for(let m=0; m<state.maps; m++){
+        if(state.paused) return 'paused';
+        const stripEl = parts[m].strip;
+        // Create ghost of the whole strip
+        const rect = stripEl.getBoundingClientRect();
+        const ghost = document.createElement('div');
+        ghost.className = 'ghost';
+        ghost.style.left = rect.left + 'px';
+        ghost.style.top = rect.top + 'px';
+        ghost.style.width = rect.width + 'px';
+        ghost.style.height = rect.height + 'px';
+        const clone = stripEl.cloneNode(true);
+        clone.style.marginTop = '0';
+        ghost.appendChild(clone);
+        document.body.appendChild(ghost);
+
+        // Append actual children to final (hidden), we'll reveal after animation
+        const vals = [...stripEl.children].map(c=> c.textContent);
+        const tmp = document.createDocumentFragment();
+        vals.forEach(v=>{
+          const c = document.createElement('div'); c.className='flat-cell'; c.textContent = v; c.style.opacity='0'; tmp.appendChild(c);
+        });
+        const target = el.finalStrip;
+        const targetRect = target.getBoundingClientRect();
+        let targetX = targetRect.left + 6;
+        if(target.children.length>0){
+          const last = target.children[target.children.length-1].getBoundingClientRect();
+          targetX = last.right + 4;
+        }
+        const targetY = targetRect.top + 6;
+        const dx = targetX - rect.left;
+        const dy = targetY - rect.top;
+        ghost.style.transform = `translate(${dx}px, ${dy}px)`;
+        await delay(420/state.speed);
+        ghost.remove();
+        target.appendChild(tmp);
+        // Fade in appended
+        [...target.children].slice(-vals.length).forEach((c,i)=>{
+          requestAnimationFrame(()=>{
+            c.style.transition = `opacity ${240/state.speed}ms ease ${i*12}ms`;
+            c.style.opacity = '1';
+          })
+        })
+        await delay(260/state.speed);
+      }
+      return 'done';
+    }
+
+    function delay(ms){ return new Promise(res=> setTimeout(res, ms)); }
+
+    function resetState(){
+      state.running = false; state.paused = false; state.mapIndex = 0; state.rowIndex = 0; state.phase = 'unroll';
+      setControlsRunning(false);
+    }
+
+    // --- Wiring ---
+    function regenerate(){
+      state.maps = clamp(+el.maps.value, 1, 6);
+      state.rows = clamp(+el.rows.value, 2, 8);
+      state.cols = clamp(+el.cols.value, 2, 8);
+      state.featureMaps = generateMaps(state.maps, state.rows, state.cols);
+      const parts = renderStage();
+      return parts;
+    }
+
+    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+
+    function updateSpeed(){
+      state.speed = +el.speed.value;
+      el.speedLabel.textContent = `${(+state.speed).toFixed(2).replace(/\.00$/,'') }x`;
+      document.documentElement.style.setProperty('--speed', `${400/state.speed}ms`);
+    }
+
+    async function runAuto(){
+      if(state.running) return;
+      state.running = true; state.paused = false; setControlsRunning(true);
+      const parts = regenerate();
+
+      // Unroll phase
+      for(let m=0; m<state.maps; m++){
+        state.mapIndex = m;
+        const res = await animateUnrollForMap(m, parts);
+        if(res==='paused'){ state.running=false; return; }
+      }
+      state.phase = 'concat';
+      const cres = await animateConcat(parts);
+      if(cres==='paused'){ state.running=false; return; }
+      state.phase = 'done';
+      state.running = false; setControlsRunning(false);
+    }
+
+    async function stepOnce(){
+      if(state.running) return; // prevent conflict with auto
+      // On first step or after reset, ensure stage is ready
+      if(!el.mapsContainer.children.length){ regenerate(); }
+      const parts = [...el.mapsContainer.children].map((card,i)=>({
+        card,
+        gridEl: card.querySelector('.grid'),
+        strip: card.querySelector('.flat-strip')
+      }));
+
+      if(state.phase==='unroll'){
+        const m = state.mapIndex;
+        const r = state.rowIndex;
+        if(m >= state.maps){ state.phase='concat'; return stepOnce(); }
+        const res = await (async ()=>{
+          const gridEl = parts[m].gridEl; const stripEl = parts[m].strip; const grid = state.featureMaps[m];
+          highlightRow(gridEl, r);
+          const ghost = createRowGhost(gridEl, r);
+          await moveGhostToStrip(ghost, stripEl);
+          ghost.remove();
+          appendRowToStrip(grid, r, stripEl);
+          await delay(260/state.speed);
+          unhighlightAll(gridEl);
+          return 'done';
+        })();
+        state.rowIndex++;
+        if(state.rowIndex>=state.rows){ state.rowIndex=0; state.mapIndex++; }
+        return res;
+      }
+      if(state.phase==='concat'){
+        // Concatenate next map strip
+        const m = (state._concatIndex ?? 0);
+        if(m>=state.maps){ state.phase='done'; return; }
+        state._concatIndex = m+1;
+        const stripEl = parts[m].strip;
+        const rect = stripEl.getBoundingClientRect();
+        const ghost = document.createElement('div'); ghost.className='ghost';
+        ghost.style.left = rect.left+'px'; ghost.style.top = rect.top+'px';
+        ghost.style.width = rect.width+'px'; ghost.style.height = rect.height+'px';
+        const clone = stripEl.cloneNode(true); clone.style.marginTop='0'; ghost.appendChild(clone); document.body.appendChild(ghost);
+        const target = el.finalStrip; const targetRect = target.getBoundingClientRect();
+        let targetX = targetRect.left + 6; if(target.children.length>0){ const last = target.children[target.children.length-1].getBoundingClientRect(); targetX = last.right + 4; }
+        const targetY = targetRect.top + 6;
+        ghost.style.transform = `translate(${targetX-rect.left}px, ${targetY-rect.top}px)`;
+        await delay(420/state.speed);
+        ghost.remove();
+        // append real children
+        [...stripEl.children].forEach(orig=>{
+          const c = document.createElement('div'); c.className='flat-cell'; c.textContent = orig.textContent; c.style.opacity='0';
+          target.appendChild(c);
+          requestAnimationFrame(()=>{ c.style.transition=`opacity ${220/state.speed}ms ease`; c.style.opacity='1'; })
+        });
+        return;
+      }
+    }
+
+    function pause(){
+      state.paused = true; state.running = false; setControlsRunning(false);
+    }
+
+    function reset(){
+      resetState(); clearStage(); delete state._concatIndex;
+    }
+
+    // --- Bind events ---
+    el.generate.addEventListener('click', ()=>{ reset(); regenerate(); });
+    el.play.addEventListener('click', runAuto);
+    el.pause.addEventListener('click', pause);
+    el.step.addEventListener('click', stepOnce);
+    el.reset.addEventListener('click', reset);
+    el.speed.addEventListener('input', updateSpeed);
+    el.maps.addEventListener('change', ()=>{ reset(); regenerate(); });
+    el.rows.addEventListener('change', ()=>{ reset(); regenerate(); });
+    el.cols.addEventListener('change', ()=>{ reset(); regenerate(); });
+
+    // Init
+    updateSpeed();
+    regenerate();
+
+    // =========================
+    // Practice Problems Section
+    // =========================
+    const practice = {
+      count: 5,
+      // Choose even H, W >= 12 so that (H-2) and (W-2) are even and >= 10, ensuring pooling is valid
+      randomEven(min, max){
+        let n = randInt(min/2, Math.floor(max/2)) * 2; // even within bounds
+        if(n < min) n = min + (min % 2); // adjust to even min if needed
+        return n;
+      },
+      makeProblem(){
+        const H = this.randomEven(12, 64);
+        const W = this.randomEven(12, 64);
+        const K = randInt(4, 32);
+        return { H, W, C: 3, K };
+      },
+      convOut(H, W){ return { H: H - 2, W: W - 2 }; },
+      poolOut(H, W){ return { H: Math.floor(H/2), W: Math.floor(W/2) }; },
+      flattenedLen(prob){
+        const c = this.convOut(prob.H, prob.W);
+        const p = this.poolOut(c.H, c.W);
+        const L = p.H * p.W * prob.K;
+        return { L, conv: c, pool: p };
+      }
+    };
+
+    function makeProblemCard(prob, idx){
+      const card = document.createElement('div'); card.className='q-card';
+      const header = document.createElement('div'); header.className='q-header';
+      const title = document.createElement('div'); title.className='q-title'; title.textContent = `Question ${idx+1}`;
+      const badge = document.createElement('span'); badge.className='badge'; badge.textContent = 'Practice';
+      header.appendChild(title); header.appendChild(badge);
+
+      const body = document.createElement('div'); body.className='q-body';
+      const prompt = document.createElement('div');
+      prompt.innerHTML = `Given an RGB image of size <strong>${prob.H} × ${prob.W} × 3</strong> and <strong>${prob.K}</strong> kernels, what is the dimension of the flattened vector?`;
+
+      const actions = document.createElement('div'); actions.className='q-actions';
+      const reveal = document.createElement('button'); reveal.className='secondary'; reveal.textContent='Reveal Answer';
+
+      const answer = document.createElement('div'); answer.className='answer';
+      const { L, conv, pool } = practice.flattenedLen(prob);
+      answer.innerHTML = `Answer: <strong>${L} × 1</strong>`+
+        `<div class="note">Conv output: ${conv.H} × ${conv.W} × ${prob.K} → Pool output: ${pool.H} × ${pool.W} × ${prob.K}<br/>`+
+        `Flatten: ${pool.H} × ${pool.W} × ${prob.K} = <code>${L}</code></div>`;
+
+      reveal.addEventListener('click', ()=>{
+        answer.classList.toggle('show');
+        reveal.textContent = answer.classList.contains('show') ? 'Hide Answer' : 'Reveal Answer';
+      });
+      actions.appendChild(reveal);
+
+  body.appendChild(prompt);
+      body.appendChild(actions);
+      body.appendChild(answer);
+
+      card.appendChild(header);
+      card.appendChild(body);
+      return card;
+    }
+
+    function renderProblems(){
+      const container = document.getElementById('problems');
+      container.innerHTML = '';
+      const probs = Array.from({length: practice.count}, ()=> practice.makeProblem());
+      probs.forEach((p,i)=> container.appendChild(makeProblemCard(p,i)));
+    }
+
+    document.getElementById('newSet').addEventListener('click', renderProblems);
+    renderProblems();
+  </script>
+</body>
+</html>
