@@ -34,3 +34,11 @@ Students compute the flattened vector dimension after this pipeline. They can cl
 - Flattened length: pooled_H × pooled_W × K
 
 Use the “New Set” button to generate a fresh batch of problems.
+
+## Softmax explained
+
+An independent section demonstrates softmax on a vector. Enter a vector (e.g., `2, 1, 0`) and compute:
+- Uses numerically stable form: subtract max and exponentiate.
+- Optional temperature T to control distribution sharpness (softmax(z/T)).
+- Shows shifted values, exponentials, their sum, and final probabilities (which sum to 1).
+- Includes a simple bar visualization of probabilities.
